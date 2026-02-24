@@ -146,7 +146,7 @@ class ObstacleFreeWaypointController:
         ex = goal_position["x"] - self.current_position["x"]
         ey = goal_position["y"] - self.current_position["y"]
         distance_error = -1 * hypot(ex, ey)
-        goal_angle = atan2(ex, ey)
+        goal_angle = atan2(ey, ex)
         angle_error = -1 * atan2(sin(goal_angle - self.current_position["theta"]), cos(goal_angle - self.current_position["theta"]))
 
         if angle_error > pi:
@@ -172,17 +172,16 @@ class ObstacleFreeWaypointController:
                     distance_error, angle_error = errs
                     u = -1 * self.angular_PID.control(angle_error, rospy.get_rostime())
                     ctrl_msg.angular.z = u
-                    print("ang", distance_error, u)
+                    print("ang", angle_error, u)
 
-                    if (abs(angle_error) < 0.2):
-                        ctrl_msg.angular.z = 0
+                    if (angle_error < 0.2 and angle_error > -0.2):
                         v = -1 * self.linear_PID.control(distance_error, rospy.get_rostime())
                         ctrl_msg.linear.x = v
                         print("lin", distance_error, v)
                     else:
                         ctrl_msg.linear.x = 0
 
-                    if abs(distance_error) < 0.1 and abs(angle_error) < 0.1:
+                    if abs(distance_error) < 0.05:
                         ctrl_msg.linear.x = 0
                         ctrl_msg.angular.z = 0
                         print("WAYPOINT REACHED")
@@ -190,6 +189,9 @@ class ObstacleFreeWaypointController:
 
                 self.robot_ctrl_pub.publish(ctrl_msg)
                 rate.sleep()
+        ctrl_msg.linear.x = 0
+        ctrl_msg.angular.z = 0
+        self.robot_ctrl_pub.publish(ctrl_msg)
         print("DONE")
 
 
