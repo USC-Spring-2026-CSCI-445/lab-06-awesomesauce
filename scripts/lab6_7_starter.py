@@ -53,13 +53,47 @@ class PIDController:
         assert u_min < u_max, "u_min should be less than u_max"
         # Initializa PID variables here
         ######### Your code starts here #########
+        self.p = 0.0
+        self.i = 0.0
+        self.d = 0.0
 
+        self.kP = kP
+        self.kD = kD
+        self.kI = kI
+
+        self.i_min = i_min
+        self.i_max = i_max
+        self.u_min = u_min
+        self.u_max = u_max
+
+        self.t_prev = None
+        self.e_prev = 0.0
         ######### Your code ends here #########
 
     def control(self, err, t):
         # compute PID control action here
         ######### Your code starts here #########
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
 
+        dt = t - self.t_prev
+        self.t_prev = t
+
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        dt = dt.to_sec()
+        self.e_prev = err
+
+        self.p = self.kP * err
+        self.i += self.kI * (err * dt)        
+        self.i = self.clamp(self.i, self.i_min, self.i_max)
+        self.d = self.kD * (de/dt)
+
+        output = self.p + self.i + self.d
+        return self.clamp(output, self.u_min, self.u_max)
         ######### Your code ends here #########
 
 
