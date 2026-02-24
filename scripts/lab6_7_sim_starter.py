@@ -61,27 +61,6 @@ class PIDController:
         ######### Your code ends here #########
 
 
-class PDController:
-    """
-    Generates control action taking into account instantaneous error (proportional action)
-    and rate of change of error (derivative action).
-    """
-
-    def __init__(self, kP, kD, kS, u_min, u_max):
-        assert u_min < u_max, "u_min should be less than u_max"
-        # Initialize PD variables here
-        ######### Your code starts here #########
-
-        ######### Your code ends here #########
-
-    def control(self, err, t):
-        dt = t - self.t_prev
-        # Compute PD control action here
-        ######### Your code starts here #########
-
-        ######### Your code ends here #########
-
-
 def publish_waypoints(waypoints: List[Dict], publisher: rospy.Publisher):
     marker_array = MarkerArray()
     for i, waypoint in enumerate(waypoints):
@@ -323,6 +302,21 @@ class ObstacleAvoidingWaypointController:
 
             # Travel through waypoints, checking if there is an obstacle in the way. Transition to obstacle avoidance if necessary
             ######### Your code starts here #########
+
+            # laserscan_etcetcetc() returns a range of datapoints/distances... how to best handle this?
+            dist = self.laserscan_distances_to_point(self.waypoints[current_waypoint_idx], pi/6) # pi/6 = 30 degrees
+            
+            # if any angle returns closer than acceptable distance, switch to object avoidance mode
+            avoid_shit = False
+            for d in dist:
+                if d < distance_from_wall_safety:
+                    avoid_shit = True
+                    break
+            
+            if avoid_shit:
+                self.obstacle_avoiding_control()
+            else:
+                self.waypoint_tracking_control(self.waypoints[current_waypoint_idx])
 
             ######### Your code ends here #########
             rate.sleep()
