@@ -13,7 +13,8 @@ from sensor_msgs.msg import LaserScan, PointCloud, ChannelFloat32
 from visualization_msgs.msg import MarkerArray, Marker
 from tf.transformations import euler_from_quaternion
 from std_msgs.msg import ColorRGBA
-
+posx_graph = []
+posy_graph = []
 
 OBS_FREE_WAYPOINTS = [
     {"x": 1, "y": 1},
@@ -52,13 +53,47 @@ class PIDController:
         assert u_min < u_max, "u_min should be less than u_max"
         # Initializa PID variables here
         ######### Your code starts here #########
+        self.p = 0.0
+        self.i = 0.0
+        self.d = 0.0
 
+        self.kP = kP
+        self.kD = kD
+        self.kI = kI
+
+        self.i_min = i_min
+        self.i_max = i_max
+        self.u_min = u_min
+        self.u_max = u_max
+
+        self.t_prev = None
+        self.e_prev = 0.0
         ######### Your code ends here #########
 
     def control(self, err, t):
         # compute PID control action here
         ######### Your code starts here #########
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
 
+        dt = t - self.t_prev
+        self.t_prev = t
+
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        dt = dt.to_sec()
+        self.e_prev = err
+
+        self.p = self.kP * err
+        self.i += self.kI * (err * dt)        
+        self.i = self.clamp(self.i, self.i_min, self.i_max)
+        self.d = self.kD * (de/dt)
+
+        output = self.p + self.i + self.d
+        return self.clamp(output, self.u_min, self.u_max)
         ######### Your code ends here #########
 
 
@@ -72,14 +107,33 @@ class PDController:
         assert u_min < u_max, "u_min should be less than u_max"
         # Initialize PD variables here
         ######### Your code starts here #########
-
+        assert u_min < u_max, "u_min should be less than u_max"
+        self.kP = kP
+        self.kD = kD
+        self.u_min = u_min
+        self.u_max = u_max
+        self.t_prev = None
+        self.e_prev = 0.0
         ######### Your code ends here #########
 
     def control(self, err, t):
         dt = t - self.t_prev
         # Compute PD control action here
         ######### Your code starts here #########
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
 
+        dt = t - self.t_prev
+        self.t_prev = t
+
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        self.e_prev = err
+        output = (self.kP * err) + (self.kD * (de/dt.to_sec()))
+        return self.clamp(output)
         ######### Your code ends here #########
 
 
@@ -126,6 +180,8 @@ class ObstacleFreeWaypointController:
         orientation = pose.orientation
         _, _, theta = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
         self.current_position = {"x": pose.position.x, "y": pose.position.y, "theta": theta}
+        posx_graph.append(pose.position.x)
+        posy_graph.append(pose.position.y)
 
     def calculate_error(self, goal_position: Dict) -> Optional[Tuple]:
         """Return distance and angle error between the current position and the provided goal_position. Returns None if
@@ -360,3 +416,5 @@ if __name__ == "__main__":
         controller.control_robot()
     except rospy.ROSInterruptException:
         print("Shutting down...")
+    plt.plot(posx_graph, posy_graph)
+    plt.savefig("test.png")
