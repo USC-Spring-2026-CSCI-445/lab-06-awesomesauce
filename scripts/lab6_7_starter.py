@@ -107,14 +107,33 @@ class PDController:
         assert u_min < u_max, "u_min should be less than u_max"
         # Initialize PD variables here
         ######### Your code starts here #########
-
+        assert u_min < u_max, "u_min should be less than u_max"
+        self.kP = kP
+        self.kD = kD
+        self.u_min = u_min
+        self.u_max = u_max
+        self.t_prev = None
+        self.e_prev = 0.0
         ######### Your code ends here #########
 
     def control(self, err, t):
         dt = t - self.t_prev
         # Compute PD control action here
         ######### Your code starts here #########
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
 
+        dt = t - self.t_prev
+        self.t_prev = t
+
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        self.e_prev = err
+        output = (self.kP * err) + (self.kD * (de/dt.to_sec()))
+        return self.clamp(output)
         ######### Your code ends here #########
 
 
