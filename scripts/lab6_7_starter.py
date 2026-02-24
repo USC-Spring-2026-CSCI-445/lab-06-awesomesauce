@@ -13,7 +13,8 @@ from sensor_msgs.msg import LaserScan, PointCloud, ChannelFloat32
 from visualization_msgs.msg import MarkerArray, Marker
 from tf.transformations import euler_from_quaternion
 from std_msgs.msg import ColorRGBA
-
+posx_graph = []
+posy_graph = []
 
 OBS_FREE_WAYPOINTS = [
     {"x": 1, "y": 1},
@@ -126,6 +127,8 @@ class ObstacleFreeWaypointController:
         orientation = pose.orientation
         _, _, theta = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
         self.current_position = {"x": pose.position.x, "y": pose.position.y, "theta": theta}
+        posx_graph.append(pose.position.x)
+        posy_graph.append(pose.position.y)
 
     def calculate_error(self, goal_position: Dict) -> Optional[Tuple]:
         """Return distance and angle error between the current position and the provided goal_position. Returns None if
@@ -360,3 +363,5 @@ if __name__ == "__main__":
         controller.control_robot()
     except rospy.ROSInterruptException:
         print("Shutting down...")
+    plt.plot(posx_graph, posy_graph)
+    plt.savefig("test.png")
