@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from typing import Optional, Tuple, List, Dict
 from argparse import ArgumentParser
-from math import radians, inf, sqrt, atan2, pi, isinf, cos, sin, degrees
+from math import radians, inf, sqrt, atan2, pi, isinf, cos, sin, degrees, hypot
 from time import sleep, time
 import queue
 
@@ -12,6 +12,9 @@ from sensor_msgs.msg import LaserScan, PointCloud, ChannelFloat32
 from visualization_msgs.msg import MarkerArray, Marker
 from tf.transformations import euler_from_quaternion
 from std_msgs.msg import ColorRGBA
+
+MAX_ROT_VEL = 2.84
+MAX_LIN_VEL = 0.22
 
 
 OBS_FREE_WAYPOINTS = [
@@ -46,20 +49,51 @@ class PIDController:
     Generates control action taking into account instantaneous error (proportional action),
     accumulated error (integral action) and rate of change of error (derivative action).
     """
-
-    def __init__(self, kP, kI, kD, kS, u_min, u_max):
+    def __init__(self, kP, kD, kI, i_min, i_max, u_min, u_max):
         assert u_min < u_max, "u_min should be less than u_max"
-        # initialize PID variables here
-        ######### Your code starts here #########
+        assert i_min < i_max, "i_min should be less than i_max"
 
-        ######### Your code ends here #########
+        self.p = 0.0
+        self.i = 0.0
+        self.d = 0.0
+
+        self.kP = kP
+        self.kD = kD
+        self.kI = kI
+
+        self.i_min = i_min
+        self.i_max = i_max
+        self.u_min = u_min
+        self.u_max = u_max
+
+        self.t_prev = None
+        self.e_prev = 0.0
+
+    def clamp(self, raw, floor, ceil):
+        return floor if raw < floor else (ceil if raw > ceil else raw)
 
     def control(self, err, t):
-        # compute PID control action here
-        ######### Your code starts here #########
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
 
-        ######### Your code ends here #########
+        dt = t - self.t_prev
+        self.t_prev = t
 
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        dt = dt.to_sec()
+        self.e_prev = err
+
+        self.p = self.kP * err
+        self.i += self.kI * (err * dt)        
+        self.i = self.clamp(self.i, self.i_min, self.i_max)
+        self.d = self.kD * (de/dt)
+
+        output = self.p + self.i + self.d
+        return self.clamp(output, self.u_min, self.u_max)
 
 def publish_waypoints(waypoints: List[Dict], publisher: rospy.Publisher):
     marker_array = MarkerArray()
@@ -92,10 +126,8 @@ class ObstacleFreeWaypointController:
 
         self.current_position = None
 
-        # define linear and angular PID controllers here
-        ######### Your code starts here #########
-
-        ######### Your code ends here #########
+        self.angular_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
+        self.linear_PID = PIDController(1, 0.5, 0.00, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
     def odom_callback(self, msg):
         # Extracting current position from Odometry message
@@ -110,11 +142,17 @@ class ObstacleFreeWaypointController:
         """
         if self.current_position is None:
             return None
+        
+        ex = goal_position["x"] - self.current_position["x"]
+        ey = goal_position["y"] - self.current_position["y"]
+        distance_error = -1 * hypot(ex, ey)
+        goal_angle = atan2(ey, ex)
+        angle_error = -1 * atan2(sin(goal_angle - self.current_position["theta"]), cos(goal_angle - self.current_position["theta"]))
 
-        # Calculate error in position and orientation
-        ######### Your code starts here #########
-
-        ######### Your code ends here #########
+        if angle_error > pi:
+            angle_error -= 2 * pi
+        elif angle_error < -pi:
+            angle_error += 2 * pi
 
         return distance_error, angle_error
 
@@ -124,14 +162,38 @@ class ObstacleFreeWaypointController:
 
         # initialize first waypoint
         current_waypoint_idx = 0
+        for waypoint in self.waypoints:
+            print("NEXT ITER:")
+            print('\t', waypoint)
+            self.current_position = None
+            while not rospy.is_shutdown():
+                errs = self.calculate_error(waypoint)
+                if (errs is not None):
+                    distance_error, angle_error = errs
+                    u = -1 * self.angular_PID.control(angle_error, rospy.get_rostime())
+                    ctrl_msg.angular.z = u
+                    print("ang", angle_error, u)
 
-        while not rospy.is_shutdown():
+                    if (angle_error < 0.2 and angle_error > -0.2):
+                        v = -1 * self.linear_PID.control(distance_error, rospy.get_rostime())
+                        ctrl_msg.linear.x = v
+                        print("lin", distance_error, v)
+                    else:
+                        ctrl_msg.linear.x = 0
 
-            # Travel through waypoints one at a time, checking if robot is close enough
-            ######### Your code starts here #########
+                    if abs(distance_error) < 0.05:
+                        ctrl_msg.linear.x = 0
+                        ctrl_msg.angular.z = 0
+                        print("WAYPOINT REACHED")
+                        break
 
-            ######### Your code ends here #########
-            rate.sleep()
+                self.robot_ctrl_pub.publish(ctrl_msg)
+                rate.sleep()
+        ctrl_msg.linear.x = 0
+        ctrl_msg.angular.z = 0
+        self.robot_ctrl_pub.publish(ctrl_msg)
+        print("DONE")
+
 
 
 class ObstacleAvoidingWaypointController:
