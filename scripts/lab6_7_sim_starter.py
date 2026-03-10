@@ -243,7 +243,7 @@ class ObstacleAvoidingWaypointController:
         self.laserscan: Optional[LaserScan] = None
         self.laserscan_angles: Optional[List[float]] = None
         self.ir_distance = None
-        self.wall_following_desired_distance = 0.5  # set this to whatever you want
+        self.wall_following_desired_distance = 0.7  # set this to whatever you want
 
         self.current_position = None
         self.angular_point_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
@@ -344,7 +344,7 @@ class ObstacleAvoidingWaypointController:
 
         ######### Your code starts here #########
 
-        err = desired_distance - self.ir_distance
+        err = self.wall_following_desired_distance - self.ir_distance
 
         # using PD controller, compute and send motor commands
         u = self.rot_controller.control(err, rospy.get_rostime())
