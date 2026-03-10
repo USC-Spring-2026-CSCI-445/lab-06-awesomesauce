@@ -394,6 +394,21 @@ class ObstacleAvoidingWaypointController:
             # Travel through waypoints, checking if there is an obstacle in the way. Transition to obstacle avoidance if necessary
             ######### Your code starts here #########
 
+            # laserscan_etcetcetc() returns a range of datapoints/distances... how to best handle this?
+            dist = self.laserscan_distances_to_point(self.waypoints[current_waypoint_idx], pi/6) # pi/6 = 30 degrees
+            
+            # if any angle returns closer than acceptable distance, switch to object avoidance mode
+            avoid_shit = False
+            for d in dist:
+                if d < distance_from_wall_safety:
+                    avoid_shit = True
+                    break
+            
+            if avoid_shit:
+                self.obstacle_avoiding_control()
+            else:
+                self.waypoint_tracking_control(self.waypoints[current_waypoint_idx])
+
             ######### Your code ends here #########
             rate.sleep()
 
