@@ -125,7 +125,6 @@ class ObstacleFreeWaypointController:
         publish_waypoints(self.waypoints, self.waypoint_pub)
 
         self.current_position = None
-
         self.angular_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
         self.linear_PID = PIDController(1, 0.5, 0.00, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
@@ -201,11 +200,16 @@ class ObstacleAvoidingWaypointController:
         rospy.init_node("waypoint_follower", anonymous=True)
         self.waypoints = waypoints
 
+        self.current_waypoint_idx = 0
         self.current_position = None
         self.laserscan: Optional[LaserScan] = None
         self.laserscan_angles: Optional[List[float]] = None
         self.ir_distance = None
         self.wall_following_desired_distance = 0.5  # set this to whatever you want
+
+        self.current_position = None
+        self.angular_point_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
+        self.linear_point_PID = PIDController(1, 0.5, 0.00, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
         # Subscriber to the robot's current position (assuming you have Odometry data)
         self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
@@ -222,6 +226,27 @@ class ObstacleAvoidingWaypointController:
         ######### Your code starts here #########
 
         ######### Your code ends here #########
+
+    def calculate_error(self, goal_position: Dict) -> Optional[Tuple]:
+        """Return distance and angle error between the current position and the provided goal_position. Returns None if
+        the current position is not available.
+        """
+        if self.current_position is None:
+            return None
+        
+        ex = goal_position["x"] - self.current_position["x"]
+        ey = goal_position["y"] - self.current_position["y"]
+        distance_error = -1 * hypot(ex, ey)
+        goal_angle = atan2(ey, ex)
+        angle_error = -1 * atan2(sin(goal_angle - self.current_position["theta"]), cos(goal_angle - self.current_position["theta"]))
+
+        if angle_error > pi:
+            angle_error -= 2 * pi
+        elif angle_error < -pi:
+            angle_error += 2 * pi
+
+        return distance_error, angle_error
+
 
     def robot_laserscan_callback(self, msg: LaserScan):
         self.laserscan = msg
@@ -249,40 +274,36 @@ class ObstacleAvoidingWaypointController:
     def waypoint_tracking_control(self, goal_position: Dict):
         ctrl_msg = Twist()
 
-        # initialize first waypoint
-        current_waypoint_idx = 0
-        for waypoint in self.waypoints:
-            print("NEXT ITER:")
-            print('\t', waypoint)
+        waypoint = self.waypoints[self.current_waypoint_idx]
+        print("NEXT ITER:")
+        print('\t', waypoint)
 
-            self.current_position = None
-            while not rospy.is_shutdown():
-                errs = self.calculate_error(waypoint)
-                if (errs is not None):
-                    distance_error, angle_error = errs
-                    u = -1 * self.angular_PID.control(angle_error, rospy.get_rostime())
-                    ctrl_msg.angular.z = u
-                    print("ang", angle_error, u)
+        errs = self.calculate_error(waypoint)
+        if (errs is not None):
+            distance_error, angle_error = errs
+            u = -1 * self.angular_point_PID.control(angle_error, rospy.get_rostime())
+            ctrl_msg.angular.z = u
+            print("ang", angle_error, u)
 
-                    if (angle_error < 0.2 and angle_error > -0.2):
-                        v = -1 * self.linear_PID.control(distance_error, rospy.get_rostime())
-                        ctrl_msg.linear.x = v
-                        print("lin", distance_error, v)
-                    else:
-                        ctrl_msg.linear.x = 0
+            if (angle_error < 0.2 and angle_error > -0.2):
+                v = -1 * self.linear_point_PID.control(distance_error, rospy.get_rostime())
+                ctrl_msg.linear.x = v
+                print("lin", distance_error, v)
+            else:
+                ctrl_msg.linear.x = 0
 
-                    if abs(distance_error) < 0.05:
-                        ctrl_msg.linear.x = 0
-                        ctrl_msg.angular.z = 0
-                        print("WAYPOINT REACHED")
-                        break
+            if abs(distance_error) < 0.05:
+                ctrl_msg.linear.x = 0
+                ctrl_msg.angular.z = 0
+                print("WAYPOINT REACHED")
+                self.current_waypoint_idx += 1
+            self.robot_ctrl_pub.publish(ctrl_msg)
 
-                self.robot_ctrl_pub.publish(ctrl_msg)
-                rate.sleep()
-        ctrl_msg.linear.x = 0
-        ctrl_msg.angular.z = 0
-        self.robot_ctrl_pub.publish(ctrl_msg)
-        print("DONE")
+        if self.current_waypoint_idx > len(self.waypoints):
+            ctrl_msg.linear.x = 0
+            ctrl_msg.angular.z = 0
+            self.robot_ctrl_pub.publish(ctrl_msg)
+            print("DONE")
 
         rospy.loginfo(
             f"distance to target: {distance_error:.2f}\tangle error: {angle_error:.2f}\tcommanded linear vel: {cmd_linear_vel:.2f}\tcommanded angular vel: {cmd_angular_vel:.2f}"
