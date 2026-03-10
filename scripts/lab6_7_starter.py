@@ -206,8 +206,6 @@ class ObstacleFreeWaypointController:
             angle_error -= 2 * math.pi
         elif angle_error < -math.pi:
             angle_error += 2 * math.pi
-
-        return distance_error, angle_error
         ######### Your code ends here #########
 
         return distance_error, angle_error
