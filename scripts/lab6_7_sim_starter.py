@@ -274,10 +274,7 @@ class ObstacleAvoidingWaypointController:
     def waypoint_tracking_control(self, goal_position: Dict):
         ctrl_msg = Twist()
 
-        waypoint = self.waypoints[self.current_waypoint_idx]
-        print("NEXT ITER:")
-        print('\t', waypoint)
-
+        waypoint = goal_position
         errs = self.calculate_error(waypoint)
         if (errs is not None):
             distance_error, angle_error = errs
@@ -298,12 +295,6 @@ class ObstacleAvoidingWaypointController:
                 print("WAYPOINT REACHED")
                 self.current_waypoint_idx += 1
             self.robot_ctrl_pub.publish(ctrl_msg)
-
-        if self.current_waypoint_idx > len(self.waypoints):
-            ctrl_msg.linear.x = 0
-            ctrl_msg.angular.z = 0
-            self.robot_ctrl_pub.publish(ctrl_msg)
-            print("DONE")
 
         rospy.loginfo(
             f"distance to target: {distance_error:.2f}\tangle error: {angle_error:.2f}\tcommanded linear vel: {cmd_linear_vel:.2f}\tcommanded angular vel: {cmd_angular_vel:.2f}"
