@@ -43,6 +43,44 @@ def map_to_new_range(x: float, a_low: float, a_high: float, b_low: float, b_high
     y = (x - a_low) / (a_high - a_low) * (b_high - b_low) + b_low
     return y
 
+# AW: obstacle avoidance copy
+class PDController:
+    """
+    Generates control action taking into account instantaneous error (proportional action)
+    and rate of change of error (derivative action).
+    """
+
+    def __init__(self, kP, kD, u_min, u_max):
+        assert u_min < u_max, "u_min should be less than u_max"
+        self.kP = kP
+        self.kD = kD
+        self.u_min = u_min
+        self.u_max = u_max
+        self.t_prev = None
+        self.e_prev = 0.0
+
+    def clamp(self, output):
+        if output < self.u_min:
+            return self.u_min
+        elif output > self.u_max:
+            return self.u_max
+        else:
+            return output
+
+    def control(self, err, t):
+        if (self.t_prev is None):
+            self.t_prev = t
+            return 0
+        
+        dt = t - self.t_prev
+        self.t_prev = t
+
+        if dt <= rospy.Duration.from_sec(1e-10):
+            return 0
+
+        de = err - self.e_prev
+        output = (self.kP * err) + (self.kD * (de/dt.to_sec()))
+        return self.clamp(output)
 
 class PIDController:
     """
