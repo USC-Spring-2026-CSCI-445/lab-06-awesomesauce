@@ -335,10 +335,10 @@ class ObstacleAvoidingWaypointController:
                 ctrl_msg.angular.z = 0
                 print("WAYPOINT REACHED")
                 self.current_waypoint_idx += 1
-            self.robot_ctrl_pub.publish(ctrl_msg)
+        self.robot_ctrl_pub.publish(ctrl_msg)
 
         rospy.loginfo(
-            f"distance to target: {distance_error:.2f}\tangle error: {angle_error:.2f}\tcommanded linear vel: {cmd_linear_vel:.2f}\tcommanded angular vel: {cmd_angular_vel:.2f}"
+            f"POINT: {distance_error:.2f}\tangle error: {angle_error:.2f}"
         )
 
     def obstacle_avoiding_control(self, visualize: bool = True):
@@ -349,6 +349,8 @@ class ObstacleAvoidingWaypointController:
 
         if self.ir_distance is None:
             print("Waiting for IR sensor readings")
+            ctrl_msg.angular.z = -1
+            self.robot_ctrl_pub.publish(ctrl_msg)
             sleep(0.1)
             return
 
@@ -366,7 +368,7 @@ class ObstacleAvoidingWaypointController:
 
         self.robot_ctrl_pub.publish(ctrl_msg)
         print(
-            f"dist: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
+            f"AVOID: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
         )
 
     def laserscan_distances_to_point(self, point: Dict, cone_angle: float, visualize: bool = False):
@@ -450,7 +452,7 @@ class ObstacleAvoidingWaypointController:
         rate = rospy.Rate(10)  # 20 Hz
 
         current_waypoint_idx = 0
-        distance_from_wall_safety = 1.0
+        distance_from_wall_safety = 0.5
         cone_angle = radians(5)
 
         while not rospy.is_shutdown():
@@ -463,18 +465,27 @@ class ObstacleAvoidingWaypointController:
             ######### Your code starts here #########
 
             # laserscan_etcetcetc() returns a range of datapoints/distances... how to best handle this?
-            dist = self.laserscan_distances_to_point(self.waypoints[current_waypoint_idx], pi/6) # pi/6 = 30 degrees
+            dist = self.laserscan_distances_to_point(self.waypoints[current_waypoint_idx], pi/10) # pi/6 = 30 degrees
             
             # if any angle returns closer than acceptable distance, switch to object avoidance mode
+            was_avoiding_shit = False
             avoid_shit = False
             for d in dist:
                 if d < distance_from_wall_safety:
+                    if not was_avoiding_shit:
+                        ctrl_msg = Twist()
+                        ctrl_msg.linear.x = 0
+                        ctrl_msg.angular.z = 0
+                        self.robot_ctrl_pub.publish(ctrl_msg)
                     avoid_shit = True
                     break
+
             
             if avoid_shit:
+                was_avoiding_shit = True
                 self.obstacle_avoiding_control()
             else:
+                was_avoiding_shit = False
                 self.waypoint_tracking_control(self.waypoints[current_waypoint_idx])
 
             ######### Your code ends here #########
