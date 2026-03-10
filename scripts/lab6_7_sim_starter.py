@@ -344,6 +344,11 @@ class ObstacleAvoidingWaypointController:
 
         ######### Your code starts here #########
 
+        if self.ir_distance is None:
+            print("Waiting for IR sensor readings")
+            sleep(0.1)
+            return
+
         err = self.wall_following_desired_distance - self.ir_distance
 
         # using PD controller, compute and send motor commands
