@@ -353,6 +353,16 @@ class ObstacleAvoidingWaypointController:
 
         ######### Your code starts here #########
 
+        err = desired_distance - self.ir_distance
+
+        # using PD controller, compute and send motor commands
+        u = self.rot_controller.control(err, rospy.get_rostime())
+        ctrl_msg.angular.z = -1 * u
+
+        v = self.lin_controller.control(abs(err), rospy.get_rostime())
+        ctrl_msg.linear.x = MAX_LIN_VEL - v
+
+
         ######### Your code ends here #########
 
         self.robot_ctrl_pub.publish(ctrl_msg)
