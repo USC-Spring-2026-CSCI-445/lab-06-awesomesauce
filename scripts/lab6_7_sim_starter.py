@@ -249,6 +249,9 @@ class ObstacleAvoidingWaypointController:
         self.angular_point_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
         self.linear_point_PID = PIDController(1, 0.5, 0.00, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
+        self.angular_obstacle_PID = PIDController(0.3, 0.0, 0.0, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
+        self.linear_obstacle_PID = PIDController(1, 0.01, 0.0, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
+
         # Subscriber to the robot's current position (assuming you have Odometry data)
         self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
         self.laserscan_sub = rospy.Subscriber("/scan", LaserScan, self.robot_laserscan_callback)
@@ -352,10 +355,10 @@ class ObstacleAvoidingWaypointController:
         err = self.wall_following_desired_distance - self.ir_distance
 
         # using PD controller, compute and send motor commands
-        u = self.rot_controller.control(err, rospy.get_rostime())
+        u = self.angular_obstacle_PID.control(err, rospy.get_rostime())
         ctrl_msg.angular.z = -1 * u
 
-        v = self.lin_controller.control(abs(err), rospy.get_rostime())
+        v = self.linear_obstacle_PID.control(abs(err), rospy.get_rostime())
         ctrl_msg.linear.x = MAX_LIN_VEL - v
 
 
