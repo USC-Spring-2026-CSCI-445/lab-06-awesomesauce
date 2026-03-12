@@ -221,7 +221,7 @@ class ObstacleFreeWaypointController:
                     if abs(distance_error) < 0.05:
                         ctrl_msg.linear.x = 0
                         ctrl_msg.angular.z = 0
-                        print("WAYPOINT REACHED")
+                        print("\nWAYPOINT REACHED\n")
                         break
 
                 self.robot_ctrl_pub.publish(ctrl_msg)
@@ -249,8 +249,8 @@ class ObstacleAvoidingWaypointController:
         self.angular_point_PID = PIDController(1, 0.2, 0.01, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
         self.linear_point_PID = PIDController(1, 0.5, 0.00, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
-        self.angular_obstacle_PID = PIDController(0.3, 0.0, 0.0, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
-        self.linear_obstacle_PID = PIDController(1, 0.01, 0.0, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
+        self.angular_obstacle_PID = PIDController(0.5, 0.1, 0.3, -1, 1, -1 * MAX_ROT_VEL, MAX_ROT_VEL)
+        self.linear_obstacle_PID = PIDController(1, 0.1, 0.5, -0.3, 0.3, -1 * MAX_LIN_VEL, MAX_LIN_VEL)
 
         # Subscriber to the robot's current position (assuming you have Odometry data)
         self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
@@ -330,16 +330,16 @@ class ObstacleAvoidingWaypointController:
             else:
                 ctrl_msg.linear.x = 0
 
-            if abs(distance_error) < 0.05:
+            if abs(distance_error) < 0.1:
                 ctrl_msg.linear.x = 0
                 ctrl_msg.angular.z = 0
                 print("WAYPOINT REACHED")
                 self.current_waypoint_idx += 1
         self.robot_ctrl_pub.publish(ctrl_msg)
 
-        rospy.loginfo(
-            f"POINT: {distance_error:.2f}\tangle error: {angle_error:.2f}"
-        )
+        # rospy.loginfo(
+        #     f"POINT: {distance_error:.2f}\tangle error: {angle_error:.2f}"
+        # )
 
     def obstacle_avoiding_control(self, visualize: bool = True):
 
@@ -361,15 +361,15 @@ class ObstacleAvoidingWaypointController:
         ctrl_msg.angular.z = -1 * u
 
         v = self.linear_obstacle_PID.control(abs(err), rospy.get_rostime())
-        ctrl_msg.linear.x = MAX_LIN_VEL - v
+        ctrl_msg.linear.x = MAX_LIN_VEL - u
 
 
         ######### Your code ends here #########
 
         self.robot_ctrl_pub.publish(ctrl_msg)
-        print(
-            f"AVOID: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
-        )
+        # print(
+        #     f"AVOID: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
+        # )
 
     def laserscan_distances_to_point(self, point: Dict, cone_angle: float, visualize: bool = False):
         """Returns the laserscan distances within the cone of angle `cone_angle` centered about the line pointing from
@@ -451,7 +451,7 @@ class ObstacleAvoidingWaypointController:
     def control_robot(self):
         rate = rospy.Rate(10)  # 20 Hz
 
-        current_waypoint_idx = 0
+        self.current_waypoint_idx = 0
         distance_from_wall_safety = 0.5
         cone_angle = radians(5)
 
@@ -465,7 +465,7 @@ class ObstacleAvoidingWaypointController:
             ######### Your code starts here #########
 
             # laserscan_etcetcetc() returns a range of datapoints/distances... how to best handle this?
-            dist = self.laserscan_distances_to_point(self.waypoints[current_waypoint_idx], pi/10) # pi/6 = 30 degrees
+            dist = self.laserscan_distances_to_point(self.waypoints[self.current_waypoint_idx], pi/10) # pi/6 = 30 degrees
             
             # if any angle returns closer than acceptable distance, switch to object avoidance mode
             was_avoiding_shit = False
@@ -486,7 +486,7 @@ class ObstacleAvoidingWaypointController:
                 self.obstacle_avoiding_control()
             else:
                 was_avoiding_shit = False
-                self.waypoint_tracking_control(self.waypoints[current_waypoint_idx])
+                self.waypoint_tracking_control(self.waypoints[self.current_waypoint_idx])
 
             ######### Your code ends here #########
             rate.sleep()
