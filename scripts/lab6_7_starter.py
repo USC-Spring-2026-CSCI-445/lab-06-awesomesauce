@@ -27,8 +27,8 @@ OBS_FREE_WAYPOINTS = [
 ]
 
 W_OBS_WAYPOINTS = [
-    {"x": 3.0, "y": 0.0},
-    # {"x": 4, "y": 1},
+    {"x": 2, "y": 1},
+    {"x": 4, "y": 1},
     # {"x": 0, "y": 3.0},
 ]
 
@@ -177,7 +177,7 @@ class ObstacleFreeWaypointController:
         rate = rospy.Rate(20)  # 20 Hz
         ctrl_msg = Twist()
 
-        current_waypoint_idx = 0
+        self.current_waypoint_idx = 0
 
         while not rospy.is_shutdown():
 
@@ -223,9 +223,10 @@ class ObstacleAvoidingWaypointController:
 
     def sensor_state_callback(self, state: SensorState):
         raw = state.cliff
-        if (raw >= 460):
-            raw = 1000
-        self.ir_distance = (5691.07618 * (raw ** -0.894819)) / 35.0
+        if (raw >= 400):
+            self.ir_distance = None
+            return
+        self.ir_distance = (5691.07618 * (raw ** -0.894819))
 
     def robot_laserscan_callback(self, msg: LaserScan):
         self.laserscan = msg
@@ -406,10 +407,12 @@ class ObstacleAvoidingWaypointController:
         rate = rospy.Rate(10)  # 20 Hz
 
         self.current_waypoint_idx = 0
-        distance_from_wall_safety = 0.5
+        distance_from_wall_safety = 0.45
         cone_angle = radians(5)
 
         while not rospy.is_shutdown():
+            if self.current_waypoint_idx >= 2:
+                self.current_waypoint_idx = 0
 
             if self.current_position is None or self.laserscan is None:
                 sleep(0.01)
@@ -419,13 +422,14 @@ class ObstacleAvoidingWaypointController:
             ######### Your code starts here #########
 
             # laserscan_etcetcetc() returns a range of datapoints/distances... how to best handle this?
-            dist = self.laserscan_distances_to_point(self.waypoints[self.current_waypoint_idx], pi/10) # pi/6 = 30 degrees
+            dist = self.laserscan_distances_to_point(self.waypoints[self.current_waypoint_idx], pi/12) # pi/6 = 30 degrees
 
             # if any angle returns closer than acceptable distance, switch to object avoidance mode
             was_avoiding_shit = False
             avoid_shit = False
             for d in dist:
                 if d < distance_from_wall_safety:
+                    print(d)
                     if not was_avoiding_shit:
                         ctrl_msg = Twist()
                         ctrl_msg.linear.x = 0
@@ -436,11 +440,9 @@ class ObstacleAvoidingWaypointController:
 
 
             if avoid_shit:
-                print("avoid shit")
                 was_avoiding_shit = True
                 self.obstacle_avoiding_control()
             else:
-                print("not avoid shit")
                 was_avoiding_shit = False
                 self.waypoint_tracking_control(self.waypoints[self.current_waypoint_idx])
 
