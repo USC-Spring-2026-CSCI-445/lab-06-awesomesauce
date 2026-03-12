@@ -24,7 +24,7 @@ OBS_FREE_WAYPOINTS = [
 ]
 
 W_OBS_WAYPOINTS = [
-    {"x": 1.5, "y": 1.5},
+    {"x": 2, "y": 2},
     {"x": 4, "y": 1},
     {"x": 0, "y": 3.0},
 ]
@@ -321,16 +321,16 @@ class ObstacleAvoidingWaypointController:
             distance_error, angle_error = errs
             u = -1 * self.angular_point_PID.control(angle_error, rospy.get_rostime())
             ctrl_msg.angular.z = u
-            print("ang", angle_error, u)
 
-            if (angle_error < 0.2 and angle_error > -0.2):
+            if (angle_error < 0.5 and angle_error > -0.5):
                 v = -1 * self.linear_point_PID.control(distance_error, rospy.get_rostime())
                 ctrl_msg.linear.x = v
                 print("lin", distance_error, v)
             else:
+                print("ang", angle_error, u)
                 ctrl_msg.linear.x = 0
 
-            if abs(distance_error) < 0.1:
+            if abs(distance_error) < 0.2:
                 ctrl_msg.linear.x = 0
                 ctrl_msg.angular.z = 0
                 print("WAYPOINT REACHED")
@@ -367,9 +367,9 @@ class ObstacleAvoidingWaypointController:
         ######### Your code ends here #########
 
         self.robot_ctrl_pub.publish(ctrl_msg)
-        # print(
-        #     f"AVOID: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
-        # )
+        print(
+            f"AVOID: {round(self.ir_distance, 4)}\ttgt: {round(self.wall_following_desired_distance, 4)}\tu: {round(u, 4)}"
+        )
 
     def laserscan_distances_to_point(self, point: Dict, cone_angle: float, visualize: bool = False):
         """Returns the laserscan distances within the cone of angle `cone_angle` centered about the line pointing from
